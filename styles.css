@@ -122,3 +122,31 @@ pre {
     flex: 1;
   }
 }
+
+.member-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.member-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  background: #f7f7f7;
+  padding: 8px;
+  border-radius: 10px;
+  margin: 6px 0;
+}
+
+.member-row button {
+  width: auto;
+  min-width: 90px;
+}
+
+@media (min-width: 700px) {
+  .member-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
