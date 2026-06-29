@@ -4,9 +4,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Free Throw Counter</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 16px; max-width: 850px; margin: auto; }
+    body { font-family: Arial, sans-serif; padding: 16px; max-width: 900px; margin: auto; }
     h1, h2 { text-align: center; }
-    input, select { font-size: 1em; padding: 8px; margin: 4px; }
+    input, select { font-size: 1em; padding: 8px; margin: 4px; max-width: 90%; }
     button { font-size: 1em; padding: 10px 12px; margin: 4px; border-radius: 8px; }
     .card { border: 1px solid #ccc; border-radius: 12px; padding: 12px; margin: 12px 0; }
     .player-name { font-size: 1.3em; font-weight: bold; }
@@ -19,6 +19,13 @@
 <body>
 
 <h1>Free Throw Counter</h1>
+
+<div class="card">
+  <h2>Session</h2>
+  <input id="sessionName" placeholder="Session name, e.g. Monday training">
+  <button onclick="addSession()">New Session</button><br>
+  <select id="sessionSelect" onchange="setCurrentSession()"></select>
+</div>
 
 <div class="card">
   <h2>Add Player</h2>
@@ -42,7 +49,8 @@
 <div class="card">
   <h2>View</h2>
   <select id="teamFilter" onchange="render()"></select>
-  <button onclick="showReport()">Report</button>
+  <button onclick="showSessionReport()">Session Report</button>
+  <button onclick="showLifetimeReport()">Lifetime Report</button>
   <button onclick="copyReport()">Copy Report</button>
 </div>
 
@@ -50,16 +58,27 @@
 
 <div class="card">
   <h2>Report</h2>
-  <div id="report" class="report">Press Report to generate stats.</div>
+  <div id="report" class="report">Press a report button to generate stats.</div>
 </div>
 
 <script>
 let data = JSON.parse(localStorage.getItem("ftData")) || {
   players: [],
-  teams: []
+  teams: [],
+  sessions: [],
+  currentSessionId: null,
+  shots: []
 };
 
+data.sessions ||= [];
+data.shots ||= [];
+data.currentSessionId ||= null;
+
 let lastReport = "";
+
+function id() {
+  return crypto.randomUUID();
+}
 
 function save() {
   localStorage.setItem("ftData", JSON.stringify(data));
@@ -70,13 +89,53 @@ function percent(made, total) {
   return ((made / total) * 100).toFixed(1);
 }
 
+function currentSession() {
+  return data.sessions.find(s => s.id === data.currentSessionId);
+}
+
+function ensureSession() {
+  if (!data.currentSessionId) {
+    const session = {
+      id: id(),
+      name: "Default Session",
+      created: new Date().toLocaleString()
+    };
+    data.sessions.push(session);
+    data.currentSessionId = session.id;
+    save();
+  }
+}
+
+function addSession() {
+  const input = document.getElementById("sessionName");
+  const name = input.value.trim() || new Date().toLocaleString();
+
+  const session = {
+    id: id(),
+    name,
+    created: new Date().toLocaleString()
+  };
+
+  data.sessions.push(session);
+  data.currentSessionId = session.id;
+  input.value = "";
+  save();
+  render();
+}
+
+function setCurrentSession() {
+  data.currentSessionId = document.getElementById("sessionSelect").value;
+  save();
+  render();
+}
+
 function addPlayer() {
   const input = document.getElementById("playerName");
   const name = input.value.trim();
   if (!name) return;
 
   data.players.push({
-    id: crypto.randomUUID(),
+    id: id(),
     name,
     made: 0,
     total: 0,
@@ -96,11 +155,7 @@ function addTeam() {
   const name = input.value.trim();
   if (!name) return;
 
-  data.teams.push({
-    id: crypto.randomUUID(),
-    name
-  });
-
+  data.teams.push({ id: id(), name });
   input.value = "";
   save();
   render();
@@ -109,13 +164,10 @@ function addTeam() {
 function assignPlayerToTeam() {
   const playerId = document.getElementById("assignPlayer").value;
   const teamId = document.getElementById("assignTeam").value;
-
   const player = data.players.find(p => p.id === playerId);
-  if (!player || !teamId) return;
 
-  if (!player.teams.includes(teamId)) {
-    player.teams.push(teamId);
-  }
+  if (!player || !teamId) return;
+  if (!player.teams.includes(teamId)) player.teams.push(teamId);
 
   save();
   render();
@@ -137,10 +189,20 @@ function getVisiblePlayers() {
   return data.players.filter(p => p.teams.includes(filter));
 }
 
+function sessionStatsForPlayer(playerId, sessionId) {
+  const shots = data.shots.filter(s => s.playerId === playerId && s.sessionId === sessionId);
+  const made = shots.filter(s => s.result === "made").length;
+  const total = shots.length;
+  return { made, total };
+}
+
 function renderSelectors() {
+  ensureSession();
+
   const assignPlayer = document.getElementById("assignPlayer");
   const assignTeam = document.getElementById("assignTeam");
   const teamFilter = document.getElementById("teamFilter");
+  const sessionSelect = document.getElementById("sessionSelect");
 
   assignPlayer.innerHTML = data.players.map(p =>
     `<option value="${p.id}">${p.name}</option>`
@@ -159,6 +221,12 @@ function renderSelectors() {
   `;
 
   teamFilter.value = currentFilter;
+
+  sessionSelect.innerHTML = data.sessions.map(s =>
+    `<option value="${s.id}">${s.name} — ${s.created}</option>`
+  ).join("");
+
+  sessionSelect.value = data.currentSessionId;
 }
 
 function render() {
@@ -169,21 +237,23 @@ function render() {
 
   div.innerHTML = visiblePlayers.map((p) => {
     const realIndex = data.players.findIndex(x => x.id === p.id);
+    const ss = sessionStatsForPlayer(p.id, data.currentSessionId);
 
     return `
       <div class="card">
         <div class="player-name">${p.name}</div>
         <div>Teams: ${teamNames(p)}</div>
         <div>
-          Made: ${p.made} / ${p.total} (${percent(p.made, p.total)}%)<br>
+          This session: ${ss.made}/${ss.total} (${percent(ss.made, ss.total)}%)<br>
+          Lifetime: ${p.made}/${p.total} (${percent(p.made, p.total)}%)<br>
           Current streak: ${p.streak}<br>
           Best streak: ${p.bestStreak}
         </div>
 
-        <button class="made" onclick="makeShot(${realIndex})">Made</button>
-        <button class="miss" onclick="missShot(${realIndex})">Miss</button>
+        <button class="made" onclick="recordShot(${realIndex}, 'made')">Made</button>
+        <button class="miss" onclick="recordShot(${realIndex}, 'miss')">Miss</button>
         <button onclick="undo(${realIndex})">Undo</button>
-        <button onclick="resetPlayer(${realIndex})">Reset</button>
+        <button onclick="resetPlayer(${realIndex})">Reset Lifetime</button>
         <button class="danger" onclick="removePlayer(${realIndex})">Remove</button>
       </div>
     `;
@@ -195,29 +265,34 @@ function snapshot(p) {
     made: p.made,
     total: p.total,
     streak: p.streak,
-    bestStreak: p.bestStreak
+    bestStreak: p.bestStreak,
+    shotCount: data.shots.length
   });
 }
 
-function makeShot(i) {
+function recordShot(i, result) {
+  ensureSession();
+
   const p = data.players[i];
   snapshot(p);
 
-  p.made++;
-  p.total++;
-  p.streak++;
-  if (p.streak > p.bestStreak) p.bestStreak = p.streak;
-
-  save();
-  render();
-}
-
-function missShot(i) {
-  const p = data.players[i];
-  snapshot(p);
+  data.shots.push({
+    id: id(),
+    playerId: p.id,
+    sessionId: data.currentSessionId,
+    result,
+    time: new Date().toISOString()
+  });
 
   p.total++;
-  p.streak = 0;
+
+  if (result === "made") {
+    p.made++;
+    p.streak++;
+    if (p.streak > p.bestStreak) p.bestStreak = p.streak;
+  } else {
+    p.streak = 0;
+  }
 
   save();
   render();
@@ -233,13 +308,16 @@ function undo(i) {
   p.streak = last.streak;
   p.bestStreak = last.bestStreak;
 
+  data.shots = data.shots.slice(0, last.shotCount);
+
   save();
   render();
 }
 
 function resetPlayer(i) {
-  const p = data.players[i];
+  if (!confirm("Reset this player's lifetime totals? Session shot history remains.")) return;
 
+  const p = data.players[i];
   p.made = 0;
   p.total = 0;
   p.streak = 0;
@@ -251,21 +329,31 @@ function resetPlayer(i) {
 
 function removePlayer(i) {
   if (!confirm("Remove this player?")) return;
+  const playerId = data.players[i].id;
   data.players.splice(i, 1);
+  data.shots = data.shots.filter(s => s.playerId !== playerId);
   save();
   render();
 }
 
-function reportForPlayers(title, players) {
-  let made = players.reduce((sum, p) => sum + p.made, 0);
-  let total = players.reduce((sum, p) => sum + p.total, 0);
+function reportForPlayers(title, players, sessionId = null) {
+  let rows = players.map(p => {
+    if (sessionId) {
+      const ss = sessionStatsForPlayer(p.id, sessionId);
+      return { name: p.name, made: ss.made, total: ss.total, bestStreak: p.bestStreak };
+    }
+
+    return { name: p.name, made: p.made, total: p.total, bestStreak: p.bestStreak };
+  });
+
+  let made = rows.reduce((sum, p) => sum + p.made, 0);
+  let total = rows.reduce((sum, p) => sum + p.total, 0);
 
   let text = `${title}\n`;
   text += "-".repeat(title.length) + "\n";
   text += `Total: ${made}/${total} (${percent(made, total)}%)\n\n`;
 
-  players
-    .slice()
+  rows
     .sort((a, b) => a.name.localeCompare(b.name))
     .forEach(p => {
       text += `${p.name}: ${p.made}/${p.total} (${percent(p.made, p.total)}%)`;
@@ -275,8 +363,29 @@ function reportForPlayers(title, players) {
   return text;
 }
 
-function showReport() {
-  let report = "FREE THROW REPORT\n\n";
+function showSessionReport() {
+  ensureSession();
+
+  const session = currentSession();
+  let report = `FREE THROW SESSION REPORT\n`;
+  report += `${session.name}\n`;
+  report += `${session.created}\n\n`;
+
+  report += reportForPlayers("Session Overall", data.players, session.id);
+  report += "\n";
+
+  data.teams.forEach(team => {
+    const players = data.players.filter(p => p.teams.includes(team.id));
+    report += reportForPlayers(team.name, players, session.id);
+    report += "\n";
+  });
+
+  lastReport = report;
+  document.getElementById("report").textContent = report;
+}
+
+function showLifetimeReport() {
+  let report = "FREE THROW LIFETIME REPORT\n\n";
 
   report += reportForPlayers("Overall", data.players);
   report += "\n";
@@ -287,17 +396,12 @@ function showReport() {
     report += "\n";
   });
 
-  const unassigned = data.players.filter(p => p.teams.length === 0);
-  if (unassigned.length > 0) {
-    report += reportForPlayers("No Team", unassigned);
-  }
-
   lastReport = report;
   document.getElementById("report").textContent = report;
 }
 
 function copyReport() {
-  if (!lastReport) showReport();
+  if (!lastReport) showSessionReport();
 
   navigator.clipboard.writeText(lastReport).then(() => {
     alert("Report copied");
@@ -306,6 +410,7 @@ function copyReport() {
   });
 }
 
+ensureSession();
 render();
 </script>
 
