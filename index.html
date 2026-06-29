@@ -4,7 +4,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Free Throw Counter</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 16px; max-width: 900px; margin: auto; }
+    body { font-family: Arial, sans-serif; padding: 16px; max-width: 950px; margin: auto; }
     h1, h2 { text-align: center; }
     input, select { font-size: 1em; padding: 8px; margin: 4px; max-width: 90%; }
     button { font-size: 1em; padding: 10px 12px; margin: 4px; border-radius: 8px; }
@@ -21,40 +21,35 @@
 <h1>Free Throw Counter</h1>
 
 <div class="card">
+  <h2>Team</h2>
+  <input id="teamName" placeholder="Team name">
+  <button onclick="addTeam()">Add Team</button><br>
+  <select id="teamSelect" onchange="setCurrentTeam()"></select>
+</div>
+
+<div class="card">
   <h2>Session</h2>
   <input id="sessionName" placeholder="Session name, e.g. Monday training">
-  <button onclick="addSession()">New Session</button><br>
+  <button onclick="addSession()">New Session for Selected Team</button><br>
   <select id="sessionSelect" onchange="setCurrentSession()"></select>
 </div>
 
 <div class="card">
-  <h2>Add Player</h2>
+  <h2>Players</h2>
   <input id="playerName" placeholder="Player name">
-  <button onclick="addPlayer()">Add Player</button>
-</div>
-
-<div class="card">
-  <h2>Add Team</h2>
-  <input id="teamName" placeholder="Team name">
-  <button onclick="addTeam()">Add Team</button>
-</div>
-
-<div class="card">
-  <h2>Assign Player to Team</h2>
+  <button onclick="addPlayer()">Add Player</button><br>
   <select id="assignPlayer"></select>
-  <select id="assignTeam"></select>
-  <button onclick="assignPlayerToTeam()">Assign</button>
+  <button onclick="assignPlayerToCurrentTeam()">Add Player to Selected Team</button>
 </div>
 
 <div class="card">
-  <h2>View</h2>
-  <select id="teamFilter" onchange="render()"></select>
+  <h2>Reports / Export</h2>
   <button onclick="showSessionReport()">Session Report</button>
-  <button onclick="showLifetimeReport()">Lifetime Report</button>
+  <button onclick="showTeamReport()">Team Report</button>
+  <button onclick="showPlayerReport()">All Players Report</button>
   <button onclick="copyReport()">Copy Report</button>
   <button onclick="exportSelectedTeam()">Export Selected Team</button>
-  <button onclick="shareData()">Share Backup</button>
-  <input type="file" id="importFile" accept=".json" onchange="importData(event)">
+  <input type="file" id="importFile" accept=".json" onchange="importTeam(event)">
 </div>
 
 <div id="players"></div>
@@ -65,17 +60,14 @@
 </div>
 
 <script>
-let data = JSON.parse(localStorage.getItem("ftData")) || {
-  players: [],
+let data = JSON.parse(localStorage.getItem("ftDataV2")) || {
   teams: [],
+  players: [],
   sessions: [],
-  currentSessionId: null,
-  shots: []
+  shots: [],
+  currentTeamId: null,
+  currentSessionId: null
 };
-
-data.sessions ||= [];
-data.shots ||= [];
-data.currentSessionId ||= null;
 
 let lastReport = "";
 
@@ -84,439 +76,24 @@ function id() {
 }
 
 function save() {
-  localStorage.setItem("ftData", JSON.stringify(data));
+  localStorage.setItem("ftDataV2", JSON.stringify(data));
 }
 
-function percent(made, total) {
-  if (total === 0) return "0.0";
-  return ((made / total) * 100).toFixed(1);
+function pct(made, total) {
+  return total ? ((made / total) * 100).toFixed(1) : "0.0";
+}
+
+function currentTeam() {
+  return data.teams.find(t => t.id === data.currentTeamId);
 }
 
 function currentSession() {
   return data.sessions.find(s => s.id === data.currentSessionId);
 }
 
-function ensureSession() {
-  if (!data.currentSessionId) {
-    const session = {
-      id: id(),
-      name: "Default Session",
-      created: new Date().toLocaleString()
-    };
-    data.sessions.push(session);
-    data.currentSessionId = session.id;
-    save();
-  }
+function teamPlayers(teamId) {
+  return data.players.filter(p => p.teamIds.includes(teamId));
 }
 
-function addSession() {
-  const input = document.getElementById("sessionName");
-  const name = input.value.trim() || new Date().toLocaleString();
-
-  const session = {
-    id: id(),
-    name,
-    created: new Date().toLocaleString()
-  };
-
-  data.sessions.push(session);
-  data.currentSessionId = session.id;
-  input.value = "";
-  save();
-  render();
-}
-
-function setCurrentSession() {
-  data.currentSessionId = document.getElementById("sessionSelect").value;
-  save();
-  render();
-}
-
-function addPlayer() {
-  const input = document.getElementById("playerName");
-  const name = input.value.trim();
-  if (!name) return;
-
-  data.players.push({
-    id: id(),
-    name,
-    made: 0,
-    total: 0,
-    streak: 0,
-    bestStreak: 0,
-    teams: [],
-    history: []
-  });
-
-  input.value = "";
-  save();
-  render();
-}
-
-function addTeam() {
-  const input = document.getElementById("teamName");
-  const name = input.value.trim();
-  if (!name) return;
-
-  data.teams.push({ id: id(), name });
-  input.value = "";
-  save();
-  render();
-}
-
-function assignPlayerToTeam() {
-  const playerId = document.getElementById("assignPlayer").value;
-  const teamId = document.getElementById("assignTeam").value;
-  const player = data.players.find(p => p.id === playerId);
-
-  if (!player || !teamId) return;
-  if (!player.teams.includes(teamId)) player.teams.push(teamId);
-
-  save();
-  render();
-}
-
-function teamNames(player) {
-  return player.teams
-    .map(id => data.teams.find(t => t.id === id)?.name)
-    .filter(Boolean)
-    .join(", ") || "No team";
-}
-
-function getVisiblePlayers() {
-  const filter = document.getElementById("teamFilter")?.value || "all";
-
-  if (filter === "all") return data.players;
-  if (filter === "none") return data.players.filter(p => p.teams.length === 0);
-
-  return data.players.filter(p => p.teams.includes(filter));
-}
-
-function sessionStatsForPlayer(playerId, sessionId) {
-  const shots = data.shots.filter(s => s.playerId === playerId && s.sessionId === sessionId);
-  const made = shots.filter(s => s.result === "made").length;
-  const total = shots.length;
-  return { made, total };
-}
-
-function renderSelectors() {
-  ensureSession();
-
-  const assignPlayer = document.getElementById("assignPlayer");
-  const assignTeam = document.getElementById("assignTeam");
-  const teamFilter = document.getElementById("teamFilter");
-  const sessionSelect = document.getElementById("sessionSelect");
-
-  assignPlayer.innerHTML = data.players.map(p =>
-    `<option value="${p.id}">${p.name}</option>`
-  ).join("");
-
-  assignTeam.innerHTML = data.teams.map(t =>
-    `<option value="${t.id}">${t.name}</option>`
-  ).join("");
-
-  const currentFilter = teamFilter.value || "all";
-
-  teamFilter.innerHTML = `
-    <option value="all">All Players</option>
-    <option value="none">No Team</option>
-    ${data.teams.map(t => `<option value="${t.id}">${t.name}</option>`).join("")}
-  `;
-
-  teamFilter.value = currentFilter;
-
-  sessionSelect.innerHTML = data.sessions.map(s =>
-    `<option value="${s.id}">${s.name} — ${s.created}</option>`
-  ).join("");
-
-  sessionSelect.value = data.currentSessionId;
-}
-
-function render() {
-  renderSelectors();
-
-  const div = document.getElementById("players");
-  const visiblePlayers = getVisiblePlayers();
-
-  div.innerHTML = visiblePlayers.map((p) => {
-    const realIndex = data.players.findIndex(x => x.id === p.id);
-    const ss = sessionStatsForPlayer(p.id, data.currentSessionId);
-
-    return `
-      <div class="card">
-        <div class="player-name">${p.name}</div>
-        <div>Teams: ${teamNames(p)}</div>
-        <div>
-          This session: ${ss.made}/${ss.total} (${percent(ss.made, ss.total)}%)<br>
-          Lifetime: ${p.made}/${p.total} (${percent(p.made, p.total)}%)<br>
-          Current streak: ${p.streak}<br>
-          Best streak: ${p.bestStreak}
-        </div>
-
-        <button class="made" onclick="recordShot(${realIndex}, 'made')">Made</button>
-        <button class="miss" onclick="recordShot(${realIndex}, 'miss')">Miss</button>
-        <button onclick="undo(${realIndex})">Undo</button>
-        <button onclick="resetPlayer(${realIndex})">Reset Lifetime</button>
-        <button class="danger" onclick="removePlayer(${realIndex})">Remove</button>
-      </div>
-    `;
-  }).join("");
-}
-
-function snapshot(p) {
-  p.history.push({
-    made: p.made,
-    total: p.total,
-    streak: p.streak,
-    bestStreak: p.bestStreak,
-    shotCount: data.shots.length
-  });
-}
-
-function recordShot(i, result) {
-  ensureSession();
-
-  const p = data.players[i];
-  snapshot(p);
-
-  data.shots.push({
-    id: id(),
-    playerId: p.id,
-    sessionId: data.currentSessionId,
-    result,
-    time: new Date().toISOString()
-  });
-
-  p.total++;
-
-  if (result === "made") {
-    p.made++;
-    p.streak++;
-    if (p.streak > p.bestStreak) p.bestStreak = p.streak;
-  } else {
-    p.streak = 0;
-  }
-
-  save();
-  render();
-}
-
-function undo(i) {
-  const p = data.players[i];
-  const last = p.history.pop();
-  if (!last) return;
-
-  p.made = last.made;
-  p.total = last.total;
-  p.streak = last.streak;
-  p.bestStreak = last.bestStreak;
-
-  data.shots = data.shots.slice(0, last.shotCount);
-
-  save();
-  render();
-}
-
-function resetPlayer(i) {
-  if (!confirm("Reset this player's lifetime totals? Session shot history remains.")) return;
-
-  const p = data.players[i];
-  p.made = 0;
-  p.total = 0;
-  p.streak = 0;
-  p.history = [];
-
-  save();
-  render();
-}
-
-function removePlayer(i) {
-  if (!confirm("Remove this player?")) return;
-  const playerId = data.players[i].id;
-  data.players.splice(i, 1);
-  data.shots = data.shots.filter(s => s.playerId !== playerId);
-  save();
-  render();
-}
-
-function reportForPlayers(title, players, sessionId = null) {
-  let rows = players.map(p => {
-    if (sessionId) {
-      const ss = sessionStatsForPlayer(p.id, sessionId);
-      return { name: p.name, made: ss.made, total: ss.total, bestStreak: p.bestStreak };
-    }
-
-    return { name: p.name, made: p.made, total: p.total, bestStreak: p.bestStreak };
-  });
-
-  let made = rows.reduce((sum, p) => sum + p.made, 0);
-  let total = rows.reduce((sum, p) => sum + p.total, 0);
-
-  let text = `${title}\n`;
-  text += "-".repeat(title.length) + "\n";
-  text += `Total: ${made}/${total} (${percent(made, total)}%)\n\n`;
-
-  rows
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .forEach(p => {
-      text += `${p.name}: ${p.made}/${p.total} (${percent(p.made, p.total)}%)`;
-      text += ` | Best streak: ${p.bestStreak}\n`;
-    });
-
-  return text;
-}
-
-function showSessionReport() {
-  ensureSession();
-
-  const session = currentSession();
-  let report = `FREE THROW SESSION REPORT\n`;
-  report += `${session.name}\n`;
-  report += `${session.created}\n\n`;
-
-  report += reportForPlayers("Session Overall", data.players, session.id);
-  report += "\n";
-
-  data.teams.forEach(team => {
-    const players = data.players.filter(p => p.teams.includes(team.id));
-    report += reportForPlayers(team.name, players, session.id);
-    report += "\n";
-  });
-
-  lastReport = report;
-  document.getElementById("report").textContent = report;
-}
-
-function showLifetimeReport() {
-  let report = "FREE THROW LIFETIME REPORT\n\n";
-
-  report += reportForPlayers("Overall", data.players);
-  report += "\n";
-
-  data.teams.forEach(team => {
-    const players = data.players.filter(p => p.teams.includes(team.id));
-    report += reportForPlayers(team.name, players);
-    report += "\n";
-  });
-
-  lastReport = report;
-  document.getElementById("report").textContent = report;
-}
-
-function copyReport() {
-  if (!lastReport) showSessionReport();
-
-  navigator.clipboard.writeText(lastReport).then(() => {
-    alert("Report copied");
-  }).catch(() => {
-    alert("Copy failed. You can manually select the report text.");
-  });
-}
-
-function backupFilename() {
-  const d = new Date().toISOString().slice(0, 10);
-  return `free-throw-backup-${d}.json`;
-}
-
-function exportData() {
-  const blob = new Blob([JSON.stringify(data, null, 2)], {
-    type: "application/json"
-  });
-
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = backupFilename();
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-async function shareData() {
-  const file = new File(
-    [JSON.stringify(data, null, 2)],
-    backupFilename(),
-    { type: "application/json" }
-  );
-
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    await navigator.share({
-      title: "Free Throw Counter Backup",
-      text: "Free Throw Counter team/player/session data",
-      files: [file]
-    });
-  } else {
-    exportData();
-    alert("Sharing is not supported here, so the backup was downloaded instead.");
-  }
-}
-
-function importData(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-
-  reader.onload = function(e) {
-    try {
-      const imported = JSON.parse(e.target.result);
-
-      if (!imported.players || !imported.teams) {
-        alert("That does not look like a valid Free Throw Counter backup.");
-        return;
-      }
-
-      if (!confirm("Import this backup? This will replace the current data on this device.")) {
-        return;
-      }
-
-      data = imported;
-      save();
-      render();
-      alert("Import complete.");
-    } catch {
-      alert("Import failed. The file could not be read.");
-    }
-  };
-
-  reader.readAsText(file);
-}
-
-function exportSelectedTeam() {
-  const teamId = document.getElementById("teamFilter").value;
-
-  if (teamId === "all" || teamId === "none") {
-    alert("Please select a specific team first.");
-    return;
-  }
-
-  const team = data.teams.find(t => t.id === teamId);
-  const players = data.players.filter(p => p.teams.includes(teamId));
-
-  const exportData = {
-    exportType: "freeThrowTeam",
-    exportedAt: new Date().toISOString(),
-    team,
-    players
-  };
-
-  const safeName = team.name.replace(/[^a-z0-9]/gi, "_").toLowerCase();
-  const filename = `free-throw-team-${safeName}.json`;
-
-  const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-    type: "application/json"
-  });
-
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-  
-ensureSession();
-render();
-</script>
-
-</body>
-</html>
+function sessionShots(sessionId, playerId = null) {
+  return
