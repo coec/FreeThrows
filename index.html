@@ -65,31 +65,36 @@
   </div>
 </div>
 
-      <div class="card">
-        <h3>New Event</h3>
+<div class="card">
+  <h3>New Event</h3>
 
-        <label>
-          Event type
-          <select id="eventType" onchange="refreshSetup()">
-            <option value="team">Team event</option>
-            <option value="individual">Individual event</option>
-          </select>
-        </label>
+  <label>
+    Event type
+    <select id="eventType" onchange="refreshSetup()">
+      <option value="team">Team event</option>
+      <option value="individual">Individual event</option>
+    </select>
+  </label>
 
-        <label>
-          Purpose
-          <select id="eventPurpose">
-            <option value="training">Training</option>
-            <option value="game">Game</option>
-            <option value="warmup">Warm-up</option>
-            <option value="individual-practice">Individual practice</option>
-          </select>
-        </label>
+  <label>
+    Purpose
+    <select id="eventPurpose">
+      <option value="training">Training</option>
+      <option value="game">Game</option>
+      <option value="warmup">Warm-up</option>
+      <option value="individual-practice">Individual practice</option>
+    </select>
+  </label>
 
-        <input id="eventName" placeholder="Event name, e.g. Round 9 v Tigers">
+  <label>
+    Individual player
+    <select id="eventPlayerSelect"></select>
+  </label>
 
-        <button onclick="addEvent()">Create Event</button>
-      </div>
+  <input id="eventName" placeholder="Event name, e.g. Round 9 v Tigers">
+
+  <button onclick="addEvent()">Create Event</button>
+</div>
     </section>
 
     <section id="reports" class="screen">
