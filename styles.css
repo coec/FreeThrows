@@ -1,0 +1,124 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f4f4f4;
+  color: #111;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  background: #222;
+  color: white;
+  padding: 12px;
+  z-index: 10;
+}
+
+h1 {
+  font-size: 1.4rem;
+  margin: 0 0 8px;
+  text-align: center;
+}
+
+h2, h3 {
+  margin-top: 0;
+}
+
+nav {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+main {
+  padding: 12px;
+  max-width: 900px;
+  margin: auto;
+}
+
+.screen {
+  display: none;
+}
+
+.screen.active {
+  display: block;
+}
+
+.card, .player-card {
+  background: white;
+  border-radius: 14px;
+  padding: 14px;
+  margin: 12px 0;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+
+label {
+  display: block;
+  margin: 10px 0;
+  font-weight: bold;
+}
+
+input, select, button {
+  width: 100%;
+  font-size: 1.05rem;
+  padding: 12px;
+  margin: 6px 0;
+  border-radius: 10px;
+  border: 1px solid #bbb;
+}
+
+button {
+  background: #eee;
+  font-weight: bold;
+}
+
+.player-name {
+  font-size: 1.3rem;
+  font-weight: bold;
+}
+
+.stats {
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+.shot-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.made {
+  background: #c9f7c9;
+}
+
+.miss {
+  background: #ffd0d0;
+}
+
+.undo {
+  background: #fff1b8;
+}
+
+pre {
+  white-space: pre-wrap;
+  background: white;
+  padding: 12px;
+  border-radius: 12px;
+  overflow-x: auto;
+}
+
+@media (min-width: 700px) {
+  .row, .shot-buttons {
+    display: flex;
+    gap: 8px;
+  }
+
+  .row > *, .shot-buttons > * {
+    flex: 1;
+  }
+}
