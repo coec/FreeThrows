@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Free Throw Counter</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 16px; max-width: 850px; margin: auto; }
+    h1, h2 { text-align: center; }
+    input, select { font-size: 1em; padding: 8px; margin: 4px; }
+    button { font-size: 1em; padding: 10px 12px; margin: 4px; border-radius: 8px; }
+    .card { border: 1px solid #ccc; border-radius: 12px; padding: 12px; margin: 12px 0; }
+    .player-name { font-size: 1.3em; font-weight: bold; }
+    .made { background: #d7ffd7; }
+    .miss { background: #ffd7d7; }
+    .danger { background: #ffe0e0; }
+    .report { white-space: pre-wrap; background: #f5f5f5; padding: 12px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+
+<h1>Free Throw Counter</h1>
+
+<div class="card">
+  <h2>Add Player</h2>
+  <input id="playerName" placeholder="Player name">
+  <button onclick="addPlayer()">Add Player</button>
+</div>
+
+<div class="card">
+  <h2>Add Team</h2>
+  <input id="teamName" placeholder="Team name">
+  <button onclick="addTeam()">Add Team</button>
+</div>
+
+<div class="card">
+  <h2>Assign Player to Team</h2>
+  <select id="assignPlayer"></select>
+  <select id="assignTeam"></select>
+  <button onclick="assignPlayerToTeam()">Assign</button>
+</div>
+
+<div class="card">
+  <h2>View</h2>
+  <select id="teamFilter" onchange="render()"></select>
+  <button onclick="showReport()">Report</button>
+  <button onclick="copyReport()">Copy Report</button>
+</div>
+
+<div id="players"></div>
+
+<div class="card">
+  <h2>Report</h2>
+  <div id="report" class="report">Press Report to generate stats.</div>
+</div>
+
+<script>
+let data = JSON.parse(localStorage.getItem("ftData")) || {
+  players: [],
+  teams: []
+};
+
+let lastReport = "";
+
+function save() {
+  localStorage.setItem("ftData", JSON.stringify(data));
+}
+
+function percent(made, total) {
+  if (total === 0) return "0.0";
+  return ((made / total) * 100).toFixed(1);
+}
+
+function addPlayer() {
+  const input = document.getElementById("playerName");
+  const name = input.value.trim();
+  if (!name) return;
+
+  data.players.push({
+    id: crypto.randomUUID(),
+    name,
+    made: 0,
+    total: 0,
+    streak: 0,
+    bestStreak: 0,
+    teams: [],
+    history: []
+  });
+
+  input.value = "";
+  save();
+  render();
+}
+
+function addTeam() {
+  const input = document.getElementById("teamName");
+  const name = input.value.trim();
+  if (!name) return;
+
+  data.teams.push({
+    id: crypto.randomUUID(),
+    name
+  });
+
+  input.value = "";
+  save();
+  render();
+}
+
+function assignPlayerToTeam() {
+  const playerId = document.getElementById("assignPlayer").value;
+  const teamId = document.getElementById("assignTeam").value;
+
+  const player = data.players.find(p => p.id === playerId);
+  if (!player || !teamId) return;
+
+  if (!player.teams.includes(teamId)) {
+    player.teams.push(teamId);
+  }
+
+  save();
+  render();
+}
+
+function teamNames(player) {
+  return player.teams
+    .map(id => data.teams.find(t => t.id === id)?.name)
+    .filter(Boolean)
+    .join(", ") || "No team";
+}
+
+function getVisiblePlayers() {
+  const filter = document.getElementById("teamFilter")?.value || "all";
+
+  if (filter === "all") return data.players;
+  if (filter === "none") return data.players.filter(p => p.teams.length === 0);
+
+  return data.players.filter(p => p.teams.includes(filter));
+}
+
+function renderSelectors() {
+  const assignPlayer = document.getElementById("assignPlayer");
+  const assignTeam = document.getElementById("assignTeam");
+  const teamFilter = document.getElementById("teamFilter");
+
+  assignPlayer.innerHTML = data.players.map(p =>
+    `<option value="${p.id}">${p.name}</option>`
+  ).join("");
+
+  assignTeam.innerHTML = data.teams.map(t =>
+    `<option value="${t.id}">${t.name}</option>`
+  ).join("");
+
+  const currentFilter = teamFilter.value || "all";
+
+  teamFilter.innerHTML = `
+    <option value="all">All Players</option>
+    <option value="none">No Team</option>
+    ${data.teams.map(t => `<option value="${t.id}">${t.name}</option>`).join("")}
+  `;
+
+  teamFilter.value = currentFilter;
+}
+
+function render() {
+  renderSelectors();
+
+  const div = document.getElementById("players");
+  const visiblePlayers = getVisiblePlayers();
+
+  div.innerHTML = visiblePlayers.map((p) => {
+    const realIndex = data.players.findIndex(x => x.id === p.id);
+
+    return `
+      <div class="card">
+        <div class="player-name">${p.name}</div>
+        <div>Teams: ${teamNames(p)}</div>
+        <div>
+          Made: ${p.made} / ${p.total} (${percent(p.made, p.total)}%)<br>
+          Current streak: ${p.streak}<br>
+          Best streak: ${p.bestStreak}
+        </div>
+
+        <button class="made" onclick="makeShot(${realIndex})">Made</button>
+        <button class="miss" onclick="missShot(${realIndex})">Miss</button>
+        <button onclick="undo(${realIndex})">Undo</button>
+        <button onclick="resetPlayer(${realIndex})">Reset</button>
+        <button class="danger" onclick="removePlayer(${realIndex})">Remove</button>
+      </div>
+    `;
+  }).join("");
+}
+
+function snapshot(p) {
+  p.history.push({
+    made: p.made,
+    total: p.total,
+    streak: p.streak,
+    bestStreak: p.bestStreak
+  });
+}
+
+function makeShot(i) {
+  const p = data.players[i];
+  snapshot(p);
+
+  p.made++;
+  p.total++;
+  p.streak++;
+  if (p.streak > p.bestStreak) p.bestStreak = p.streak;
+
+  save();
+  render();
+}
+
+function missShot(i) {
+  const p = data.players[i];
+  snapshot(p);
+
+  p.total++;
+  p.streak = 0;
+
+  save();
+  render();
+}
+
+function undo(i) {
+  const p = data.players[i];
+  const last = p.history.pop();
+  if (!last) return;
+
+  p.made = last.made;
+  p.total = last.total;
+  p.streak = last.streak;
+  p.bestStreak = last.bestStreak;
+
+  save();
+  render();
+}
+
+function resetPlayer(i) {
+  const p = data.players[i];
+
+  p.made = 0;
+  p.total = 0;
+  p.streak = 0;
+  p.history = [];
+
+  save();
+  render();
+}
+
+function removePlayer(i) {
+  if (!confirm("Remove this player?")) return;
+  data.players.splice(i, 1);
+  save();
+  render();
+}
+
+function reportForPlayers(title, players) {
+  let made = players.reduce((sum, p) => sum + p.made, 0);
+  let total = players.reduce((sum, p) => sum + p.total, 0);
+
+  let text = `${title}\n`;
+  text += "-".repeat(title.length) + "\n";
+  text += `Total: ${made}/${total} (${percent(made, total)}%)\n\n`;
+
+  players
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach(p => {
+      text += `${p.name}: ${p.made}/${p.total} (${percent(p.made, p.total)}%)`;
+      text += ` | Best streak: ${p.bestStreak}\n`;
+    });
+
+  return text;
+}
+
+function showReport() {
+  let report = "FREE THROW REPORT\n\n";
+
+  report += reportForPlayers("Overall", data.players);
+  report += "\n";
+
+  data.teams.forEach(team => {
+    const players = data.players.filter(p => p.teams.includes(team.id));
+    report += reportForPlayers(team.name, players);
+    report += "\n";
+  });
+
+  const unassigned = data.players.filter(p => p.teams.length === 0);
+  if (unassigned.length > 0) {
+    report += reportForPlayers("No Team", unassigned);
+  }
+
+  lastReport = report;
+  document.getElementById("report").textContent = report;
+}
+
+function copyReport() {
+  if (!lastReport) showReport();
+
+  navigator.clipboard.writeText(lastReport).then(() => {
+    alert("Report copied");
+  }).catch(() => {
+    alert("Copy failed. You can manually select the report text.");
+  });
+}
+
+render();
+</script>
+
+</body>
+</html>
