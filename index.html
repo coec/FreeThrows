@@ -196,7 +196,7 @@ function addPlayer() {
   data.players.push({
     id: id(),
     name,
-    teamIds: data.currentTeamId ? [data.currentTeamId] : []
+    teamIds: []
   });
 
   document.getElementById("playerName").value = "";
