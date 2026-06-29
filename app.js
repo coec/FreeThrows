@@ -253,7 +253,7 @@ function addEvent() {
     }
     event.teamId = teamId;
   } else {
-    const playerId = document.getElementById("playerSelect").value;
+    const playerId = document.getElementById("eventPlayerSelect").value;
     if (!playerId) {
       alert("Select a player first.");
       return;
@@ -312,20 +312,21 @@ function render() {
   renderSetup();
   renderEventSelector();
   renderRecord();
-  renderTeamMembers();
 }
 
 function renderSetup() {
   const teamSelect = document.getElementById("teamSelect");
-  const playerSelect = document.getElementById("playerSelect");
+  const eventPlayerSelect = document.getElementById("eventPlayerSelect");
 
   teamSelect.innerHTML = data.teams.map(t =>
     `<option value="${t.id}">${esc(t.name)}</option>`
   ).join("");
 
-  playerSelect.innerHTML = data.players.map(p =>
+  eventPlayerSelect.innerHTML = data.players.map(p =>
     `<option value="${p.id}">${esc(p.name)}</option>`
   ).join("");
+
+  renderTeamMembers();
 }
 
 function refreshSetup() {
