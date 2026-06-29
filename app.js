@@ -309,9 +309,14 @@ function undoLast(playerId) {
 }
 
 function render() {
-  renderSetup();
-  renderEventSelector();
-  renderRecord();
+  try {
+    renderSetup();
+    renderEventSelector();
+    renderRecord();
+  } catch (err) {
+    console.error("Render failed:", err);
+    alert("Render failed: " + err.message);
+  }
 }
 
 function renderSetup() {
