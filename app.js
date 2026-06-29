@@ -320,7 +320,7 @@ function render() {
 }
 
 function renderSetup() {
-  onsole.log("renderSetup running", data.teams);
+  console.log("renderSetup running", data.teams);
   const teamSelect = document.getElementById("teamSelect");
   const eventPlayerSelect = document.getElementById("eventPlayerSelect");
 
