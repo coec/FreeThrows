@@ -34,7 +34,104 @@ function addPlayerToTeamById(playerId) {
   save();
   render();
 }
+function eventLabel(e) {
+  const owner = e.type === "team"
+    ? teamById(e.teamId)?.name || "Unknown team"
+    : playerById(e.playerId)?.name || "Unknown player";
 
+  return `${e.name} — ${owner} — ${e.purpose}`;
+}
+
+function renderReportSelector() {
+  const type = document.getElementById("reportType")?.value;
+  const selection = document.getElementById("reportSelection");
+  const label = document.getElementById("reportSelectionLabel");
+
+  if (!selection || !label) return;
+
+  selection.innerHTML = "";
+
+  if (type === "all") {
+    label.style.display = "none";
+    return;
+  }
+
+  label.style.display = "block";
+
+  let items = [];
+
+  if (type === "event") {
+    items = data.events.map(e => ({
+      id: e.id,
+      name: eventLabel(e)
+    }));
+  }
+
+  if (type === "team") {
+    items = data.teams.map(t => ({
+      id: t.id,
+      name: t.name
+    }));
+  }
+
+  if (type === "player") {
+    items = data.players.map(p => ({
+      id: p.id,
+      name: p.name
+    }));
+  }
+
+  selection.innerHTML = items.map(i =>
+    `<option value="${i.id}">${esc(i.name)}</option>`
+  ).join("");
+}
+
+function generateSelectedReport() {
+  const type = document.getElementById("reportType").value;
+  const selectedId = document.getElementById("reportSelection")?.value;
+
+  if (type === "event") {
+    const event = data.events.find(e => e.id === selectedId);
+    if (!event) return;
+
+    data.currentEventId = event.id;
+    save();
+    showEventReport();
+    return;
+  }
+
+  if (type === "team") {
+    const team = teamById(selectedId);
+    if (!team) return;
+
+    const players = teamPlayers(team.id);
+
+    lastReport =
+      `FREE THROW TEAM REPORT\n` +
+      `${team.name}\n\n` +
+      reportForPlayers("Team Events", players, p => shotsForTeam(team.id, p.id));
+
+    document.getElementById("reportOutput").textContent = lastReport;
+    return;
+  }
+
+  if (type === "player") {
+    const player = playerById(selectedId);
+    if (!player) return;
+
+    lastReport =
+      `FREE THROW PLAYER REPORT\n` +
+      `${player.name}\n\n` +
+      reportForPlayers(player.name, [player], p => shotsForPlayer(p.id));
+
+    document.getElementById("reportOutput").textContent = lastReport;
+    return;
+  }
+
+  if (type === "all") {
+    showAllPlayersReport();
+  }
+}
 function removePlayerFromTeamById(playerId) {
   const teamId = selectedTeamId();
   const player = playerById(playerId);
@@ -329,6 +426,7 @@ function render() {
     renderSetup();
     renderEventSelector();
     renderRecord();
+    renderReportSelector();
   } catch (err) {
     console.error("Render failed:", err);
     alert("Render failed: " + err.message);
