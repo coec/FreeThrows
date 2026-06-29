@@ -310,7 +310,12 @@ function undoLast(playerId) {
   save();
   renderRecord();
 }
-
+function repairCurrentTeam() {
+  if (!data.currentTeamId && data.teams.length) {
+    data.currentTeamId = data.teams[0].id;
+    save();
+  }
+}
 function render() {
   try {
     renderSetup();
@@ -575,4 +580,5 @@ function upsert(array, item) {
   else array.push(item);
 }
 
+repairCurrentTeam();
 render();
