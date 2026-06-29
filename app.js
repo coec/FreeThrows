@@ -318,13 +318,23 @@ function renderSetup() {
   const teamSelect = document.getElementById("teamSelect");
   const eventPlayerSelect = document.getElementById("eventPlayerSelect");
 
-  teamSelect.innerHTML = data.teams.map(t =>
-    `<option value="${t.id}">${esc(t.name)}</option>`
-  ).join("");
+  if (teamSelect) {
+    const currentTeam = teamSelect.value;
 
-  eventPlayerSelect.innerHTML = data.players.map(p =>
-    `<option value="${p.id}">${esc(p.name)}</option>`
-  ).join("");
+    teamSelect.innerHTML = data.teams.map(t =>
+      `<option value="${t.id}">${esc(t.name)}</option>`
+    ).join("");
+
+    if (currentTeam) {
+      teamSelect.value = currentTeam;
+    }
+  }
+
+  if (eventPlayerSelect) {
+    eventPlayerSelect.innerHTML = data.players.map(p =>
+      `<option value="${p.id}">${esc(p.name)}</option>`
+    ).join("");
+  }
 
   renderTeamMembers();
 }
