@@ -1,613 +1,101 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Free Throw Counter</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 16px; max-width: 950px; margin: auto; }
-    h1, h2 { text-align: center; }
-    input, select { font-size: 1em; padding: 8px; margin: 4px; max-width: 90%; }
-    button { font-size: 1em; padding: 10px 12px; margin: 4px; border-radius: 8px; }
-    .card { border: 1px solid #ccc; border-radius: 12px; padding: 12px; margin: 12px 0; }
-    .player-name { font-size: 1.3em; font-weight: bold; }
-    .made { background: #d7ffd7; }
-    .miss { background: #ffd7d7; }
-    .danger { background: #ffe0e0; }
-    .report { white-space: pre-wrap; background: #f5f5f5; padding: 12px; border-radius: 8px; }
-  </style>
+  <title>Free Throw Tracker</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <header class="app-header">
+    <h1>Free Throw Tracker</h1>
+    <nav>
+      <button onclick="showScreen('record')">Record</button>
+      <button onclick="showScreen('setup')">Setup</button>
+      <button onclick="showScreen('reports')">Reports</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="record" class="screen active">
+      <h2>Record Shots</h2>
+
+      <label>
+        Event
+        <select id="currentEvent" onchange="setCurrentEvent()"></select>
+      </label>
+
+      <div id="recordingArea"></div>
+    </section>
+
+    <section id="setup" class="screen">
+      <h2>Setup</h2>
 
-<h1>Free Throw Counter</h1>
-
-<div class="card">
-  <h2>Teams</h2>
-  <input id="teamName" placeholder="Team name">
-  <button onclick="addTeam()">Add Team</button><br>
-  <select id="teamSelect" onchange="setCurrentTeam()"></select>
-</div>
-
-<div class="card">
-  <h2>Players</h2>
-  <input id="playerName" placeholder="Player name">
-  <button onclick="addPlayer()">Add Player</button><br>
-  <select id="sessionPlayer"></select>
-  <button onclick="assignPlayerToCurrentTeam()">Add Player to Selected Team</button>
-</div>
-
-<div class="card">
-  <h2>New Session</h2>
-  <select id="sessionType" onchange="toggleSessionInputs(); render()">
-    <option value="team">Team Session</option>
-    <option value="individual">Individual Session</option>
-  </select><br>
-
-  <input id="sessionName" placeholder="Session name, e.g. Monday training">
-  <button onclick="addSession()">New Session</button><br>
-
-  <select id="sessionSelect" onchange="setCurrentSession()"></select>
-</div>
-
-<div class="card">
-  <h2>Reports / Export</h2>
-  <button onclick="showSessionReport()">Session Report</button>
-  <button onclick="showTeamReport()">Team Report</button>
-  <button onclick="showPlayerReport()">All Players Report</button>
-  <button onclick="copyReport()">Copy Report</button>
-  <button onclick="exportSelectedTeam()">Export Selected Team</button>
-  <input type="file" accept=".json" onchange="importTeam(event)">
-</div>
-
-<div id="players"></div>
-
-<div class="card">
-  <h2>Report</h2>
-  <div id="report" class="report">Press a report button to generate stats.</div>
-</div>
-
-<script>
-let data = JSON.parse(localStorage.getItem("ftDataV3")) || {
-  teams: [],
-  players: [],
-  sessions: [],
-  shots: [],
-  currentTeamId: null,
-  currentSessionId: null
-};
-
-let lastReport = "";
-
-function id() {
-  return crypto.randomUUID();
-}
-
-function save() {
-  localStorage.setItem("ftDataV3", JSON.stringify(data));
-}
-
-function pct(made, total) {
-  return total ? ((made / total) * 100).toFixed(1) : "0.0";
-}
-
-function currentTeam() {
-  return data.teams.find(t => t.id === data.currentTeamId);
-}
-
-function currentSession() {
-  return data.sessions.find(s => s.id === data.currentSessionId);
-}
-
-function currentSessionPlayers() {
-  const session = currentSession();
-  if (!session) return [];
-
-  if (session.type === "team") {
-    return data.players.filter(p => p.teamIds.includes(session.teamId));
-  }
-
-  return data.players.filter(p => p.id === session.playerId);
-}
-
-function teamPlayers(teamId) {
-  return data.players.filter(p => p.teamIds.includes(teamId));
-}
-
-function sessionShots(sessionId, playerId = null) {
-  return data.shots.filter(s =>
-    s.sessionId === sessionId &&
-    (!playerId || s.playerId === playerId)
-  );
-}
-
-function teamShots(teamId, playerId = null) {
-  const sessionIds = data.sessions
-    .filter(s => s.type === "team" && s.teamId === teamId)
-    .map(s => s.id);
-
-  return data.shots.filter(s =>
-    sessionIds.includes(s.sessionId) &&
-    (!playerId || s.playerId === playerId)
-  );
-}
-
-function assignPlayerToCurrentTeam(playerId) {
-  if (!data.currentTeamId) return;
-
-  const player = data.players.find(p => p.id === playerId);
-  if (!player) return;
-
-  if (!player.teamIds.includes(data.currentTeamId)) {
-    player.teamIds.push(data.currentTeamId);
-  }
-
-  save();
-  render();
-}
-
-function allPlayerShots(playerId) {
-  return data.shots.filter(s => s.playerId === playerId);
-}
-
-function stats(shots) {
-  const total = shots.length;
-  const made = shots.filter(s => s.result === "made").length;
-  return { made, total, percent: pct(made, total) };
-}
-
-function bestStreak(shots) {
-  let best = 0;
-  let current = 0;
-
-  shots.slice().sort((a, b) => a.time.localeCompare(b.time)).forEach(s => {
-    if (s.result === "made") {
-      current++;
-      best = Math.max(best, current);
-    } else {
-      current = 0;
-    }
-  });
-
-  return best;
-}
-
-function currentStreak(shots) {
-  let streak = 0;
-
-  shots.slice().sort((a, b) => b.time.localeCompare(a.time)).some(s => {
-    if (s.result === "made") {
-      streak++;
-      return false;
-    }
-    return true;
-  });
-
-  return streak;
-}
-
-function addTeam() {
-  const name = document.getElementById("teamName").value.trim();
-  if (!name) return;
-
-  const team = { id: id(), name };
-  data.teams.push(team);
-  data.currentTeamId = team.id;
-
-  document.getElementById("teamName").value = "";
-  save();
-  render();
-}
-
-function setCurrentTeam() {
-  data.currentTeamId = document.getElementById("teamSelect").value;
-  save();
-  render();
-}
-
-
-function addPlayer() {
-  const name = document.getElementById("playerName").value.trim();
-  if (!name) return;
-
-  if (!data.currentTeamId) {
-    alert("Select a team first.");
-    return;
-  }
-
-  let player = data.players.find(p => p.name.toLowerCase() === name.toLowerCase());
-
-  // If player already exists → just add to team
-  if (player) {
-    if (!player.teamIds.includes(data.currentTeamId)) {
-      player.teamIds.push(data.currentTeamId);
-    }
-  } else {
-    // Create AND assign in one step
-    player = {
-      id: id(),
-      name,
-      teamIds: [data.currentTeamId]
-    };
-    data.players.push(player);
-  }
-
-  document.getElementById("playerName").value = "";
-  save();
-  render();
-}
-
-function assignPlayerToCurrentTeam() {
-  if (!data.currentTeamId) {
-    alert("Select a team first.");
-    return;
-  }
-
-  const playerId = document.getElementById("assignPlayer").value;
-  const player = data.players.find(p => p.id === playerId);
-  if (!player) return;
-
-  if (!player.teamIds.includes(data.currentTeamId)) {
-    player.teamIds.push(data.currentTeamId);
-  }
-
-  save();
-  render();
-}
-
-function addSession() {
-  const type = document.getElementById("sessionType").value;
-  const name = document.getElementById("sessionName").value.trim() || new Date().toLocaleString();
-
-  if (type === "team") {
-    if (!data.currentTeamId) {
-      alert("Select a team first.");
-      return;
-    }
-
-    const session = {
-      id: id(),
-      type: "team",
-      teamId: data.currentTeamId,
-      name,
-      created: new Date().toLocaleString()
-    };
-
-    data.sessions.push(session);
-    data.currentSessionId = session.id;
-  }
-
-  if (type === "individual") {
-    const playerId = document.getElementById("sessionPlayer").value;
-
-    if (!playerId) {
-      alert("Select a player first.");
-      return;
-    }
-
-    const session = {
-      id: id(),
-      type: "individual",
-      playerId,
-      name,
-      created: new Date().toLocaleString()
-    };
-
-    data.sessions.push(session);
-    data.currentSessionId = session.id;
-  }
-
-  document.getElementById("sessionName").value = "";
-  save();
-  render();
-}
-  
-function toggleSessionInputs() {
-  const type = document.getElementById("sessionType").value;
-  document.getElementById("sessionPlayer").style.display =
-    type === "individual" ? "inline-block" : "none";
-}
-  
-function setCurrentSession() {
-  data.currentSessionId = document.getElementById("sessionSelect").value;
-  save();
-  render();
-}
-
-function recordShot(playerId, result) {
-  const session = currentSession();
-
-  if (!session) {
-    alert("Create or select a session first.");
-    return;
-  }
-
-  data.shots.push({
-    id: id(),
-    playerId,
-    sessionId: session.id,
-    result,
-    time: new Date().toISOString()
-  });
-
-  save();
-  render();
-}
-
-function undoPlayer(playerId) {
-  const session = currentSession();
-  if (!session) return;
-
-  const shots = data.shots
-    .filter(s => s.playerId === playerId && s.sessionId === session.id)
-    .sort((a, b) => b.time.localeCompare(a.time));
-
-  if (!shots.length) return;
-
-  data.shots = data.shots.filter(s => s.id !== shots[0].id);
-  save();
-  render();
-}
-
-function removePlayerFromTeam(playerId) {
-  if (!data.currentTeamId) return;
-  if (!confirm("Remove this player from the selected team? Shot history is kept.")) return;
-
-  const player = data.players.find(p => p.id === playerId);
-  player.teamIds = player.teamIds.filter(id => id !== data.currentTeamId);
-
-  save();
-  render();
-}
-
-function playersForCurrentTeam() {
-  if (!data.currentTeamId) return [];
-  return data.players.filter(p => p.teamIds.includes(data.currentTeamId));
-}
-
-function renderSelectors() {
-  const teamSelect = document.getElementById("teamSelect");
-  const sessionSelect = document.getElementById("sessionSelect");
-  const assignPlayer = document.getElementById("assignPlayer");
-  const sessionPlayer = document.getElementById("sessionPlayer");
-
-  teamSelect.innerHTML = data.teams.map(t =>
-    `<option value="${t.id}">${t.name}</option>`
-  ).join("");
-
-  if (data.currentTeamId) teamSelect.value = data.currentTeamId;
-
-  assignPlayer.innerHTML = playersForCurrentTeam().map(p =>
-    `<option value="${p.id}">${p.name}</option>`
-  ).join("");
-
-  sessionPlayer.innerHTML = data.players.map(p =>
-    `<option value="${p.id}">${p.name}</option>`
-  ).join("");
-
-  sessionSelect.innerHTML = data.sessions.map(s => {
-    let label = "";
-
-    if (s.type === "team") {
-      const team = data.teams.find(t => t.id === s.teamId);
-      label = `Team: ${team?.name || "Unknown"} — ${s.name}`;
-    } else {
-      const player = data.players.find(p => p.id === s.playerId);
-      label = `Individual: ${player?.name || "Unknown"} — ${s.name}`;
-    }
-
-    return `<option value="${s.id}">${label}</option>`;
-  }).join("");
-
-  if (data.currentSessionId) sessionSelect.value = data.currentSessionId;
-}
-
-function render() {
-  renderSelectors();
-
-  const div = document.getElementById("players");
-  const session = currentSession();
-
-  if (!session) {
-    div.innerHTML = `<div class="card">Create a session to record shots.</div>`;
-    return;
-  }
-
-  const players = currentSessionPlayers();
-
-  if (!players.length) {
-    div.innerHTML = `<div class="card">No players available for this session.</div>`;
-    return;
-  }
-
-  div.innerHTML = players.map(p => {
-    const ss = stats(sessionShots(session.id, p.id));
-    const ps = stats(allPlayerShots(p.id));
-    const playerSessionShots = sessionShots(session.id, p.id);
-
-    let teamLine = "";
-
-    if (session.type === "team") {
-      const ts = stats(teamShots(session.teamId, p.id));
-      teamLine = `Team lifetime: ${ts.made}/${ts.total} (${ts.percent}%)<br>`;
-    }
-
-    return `
       <div class="card">
-        <div class="player-name">${p.name}</div>
-        <div>
-          Session: ${ss.made}/${ss.total} (${ss.percent}%)<br>
-          ${teamLine}
-          Player lifetime: ${ps.made}/${ps.total} (${ps.percent}%)<br>
-          Current session streak: ${currentStreak(playerSessionShots)}<br>
-          Best session streak: ${bestStreak(playerSessionShots)}
-        </div>
-
-        <button class="made" onclick="recordShot('${p.id}', 'made')">Made</button>
-        <button class="miss" onclick="recordShot('${p.id}', 'miss')">Miss</button>
-        <button onclick="undoPlayer('${p.id}')">Undo</button>
-        <button onclick="assignPlayerToCurrentTeam('${p.id}')">
-          Add to Current Team
-        </button>
-
-        ${session.type === "team" ? `<button class="danger" onclick="removePlayerFromTeam('${p.id}')">Remove from Team</button>` : ""}
+        <h3>Teams</h3>
+        <input id="teamName" placeholder="Team name">
+        <button onclick="addTeam()">Add Team</button>
+        <select id="teamSelect"></select>
       </div>
-    `;
-  }).join("");
-}
 
-function reportForPlayers(title, players, shotFn) {
-  let text = `${title}\n`;
-  text += "-".repeat(title.length) + "\n";
+      <div class="card">
+        <h3>Players</h3>
+        <input id="playerName" placeholder="Player name">
+        <button onclick="addPlayer()">Add Player</button>
 
-  const allShots = players.flatMap(p => shotFn(p));
-  const totalStats = stats(allShots);
+        <div class="row">
+          <select id="playerSelect"></select>
+          <button onclick="addPlayerToTeam()">Add to Team</button>
+        </div>
+      </div>
 
-  text += `Total: ${totalStats.made}/${totalStats.total} (${totalStats.percent}%)\n\n`;
+      <div class="card">
+        <h3>New Event</h3>
 
-  players.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach(p => {
-    const playerShots = shotFn(p);
-    const s = stats(playerShots);
-    text += `${p.name}: ${s.made}/${s.total} (${s.percent}%)`;
-    text += ` | Best streak: ${bestStreak(playerShots)}\n`;
-  });
+        <label>
+          Event type
+          <select id="eventType" onchange="refreshSetup()">
+            <option value="team">Team event</option>
+            <option value="individual">Individual event</option>
+          </select>
+        </label>
 
-  return text;
-}
+        <label>
+          Purpose
+          <select id="eventPurpose">
+            <option value="training">Training</option>
+            <option value="game">Game</option>
+            <option value="warmup">Warm-up</option>
+            <option value="individual-practice">Individual practice</option>
+          </select>
+        </label>
 
-function showSessionReport() {
-  const session = currentSession();
-  if (!session) return;
+        <input id="eventName" placeholder="Event name, e.g. Round 9 v Tigers">
 
-  const players = currentSessionPlayers();
+        <button onclick="addEvent()">Create Event</button>
+      </div>
+    </section>
 
-  let header = `FREE THROW SESSION REPORT\n`;
+    <section id="reports" class="screen">
+      <h2>Reports</h2>
 
-  if (session.type === "team") {
-    const team = data.teams.find(t => t.id === session.teamId);
-    header += `Team: ${team?.name || "Unknown"}\n`;
-  } else {
-    const player = data.players.find(p => p.id === session.playerId);
-    header += `Individual: ${player?.name || "Unknown"}\n`;
-  }
+      <div class="card">
+        <button onclick="showEventReport()">Event Report</button>
+        <button onclick="showTeamReport()">Team Report</button>
+        <button onclick="showAllPlayersReport()">All Players Report</button>
+        <button onclick="copyReport()">Copy Report</button>
+      </div>
 
-  header += `${session.name}\n${session.created}\n\n`;
+      <div class="card">
+        <h3>Export / Import</h3>
+        <button onclick="exportSelectedTeam()">Export Selected Team</button>
+        <input type="file" accept=".json" onchange="importTeam(event)">
+      </div>
 
-  lastReport = header + reportForPlayers("Session", players, p => sessionShots(session.id, p.id));
-  document.getElementById("report").textContent = lastReport;
-}
+      <pre id="reportOutput">Choose a report.</pre>
+    </section>
+  </main>
 
-function showTeamReport() {
-  const team = currentTeam();
-  if (!team) {
-    alert("Select a team first.");
-    return;
-  }
-
-  const players = teamPlayers(team.id);
-
-  lastReport =
-    `FREE THROW TEAM REPORT\n${team.name}\n\n` +
-    reportForPlayers("Team Sessions Only", players, p => teamShots(team.id, p.id));
-
-  document.getElementById("report").textContent = lastReport;
-}
-
-function showPlayerReport() {
-  lastReport =
-    `FREE THROW ALL PLAYERS REPORT\n\n` +
-    reportForPlayers("All Players", data.players, p => allPlayerShots(p.id));
-
-  document.getElementById("report").textContent = lastReport;
-}
-
-function copyReport() {
-  if (!lastReport) showSessionReport();
-
-  navigator.clipboard.writeText(lastReport).then(() => {
-    alert("Report copied");
-  }).catch(() => {
-    alert("Copy failed. You can manually select the report text.");
-  });
-}
-
-function exportSelectedTeam() {
-  const team = currentTeam();
-
-  if (!team) {
-    alert("Select a team first.");
-    return;
-  }
-
-  const players = teamPlayers(team.id);
-  const sessions = data.sessions.filter(s => s.type === "team" && s.teamId === team.id);
-  const sessionIds = sessions.map(s => s.id);
-  const shots = data.shots.filter(s => sessionIds.includes(s.sessionId));
-
-  const exportData = {
-    exportType: "freeThrowTeamV3",
-    exportedAt: new Date().toISOString(),
-    team,
-    players,
-    sessions,
-    shots
-  };
-
-  const safeName = team.name.replace(/[^a-z0-9]/gi, "_").toLowerCase();
-  const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-    type: "application/json"
-  });
-
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `free-throw-team-${safeName}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function importTeam(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-
-  reader.onload = function(e) {
-    try {
-      const imported = JSON.parse(e.target.result);
-
-      if (imported.exportType !== "freeThrowTeamV3") {
-        alert("That is not a valid team export.");
-        return;
-      }
-
-      if (!confirm("Import this team? Existing matching IDs will be updated.")) return;
-
-      upsert(data.teams, imported.team);
-      imported.players.forEach(p => upsert(data.players, p));
-      imported.sessions.forEach(s => upsert(data.sessions, s));
-      imported.shots.forEach(s => upsert(data.shots, s));
-
-      data.currentTeamId = imported.team.id;
-      data.currentSessionId = imported.sessions[0]?.id || null;
-
-      save();
-      render();
-      alert("Team import complete.");
-    } catch {
-      alert("Import failed.");
-    }
-  };
-
-  reader.readAsText(file);
-}
-
-function upsert(array, item) {
-  const index = array.findIndex(x => x.id === item.id);
-  if (index >= 0) array[index] = item;
-  else array.push(item);
-}
-
-render();
-</script>
-
+  <script src="app.js"></script>
 </body>
 </html>
