@@ -31,13 +31,13 @@
   <h2>Players</h2>
   <input id="playerName" placeholder="Player name">
   <button onclick="addPlayer()">Add Player</button><br>
-  <select id="assignPlayer"></select>
+  <select id="sessionPlayer"></select>
   <button onclick="assignPlayerToCurrentTeam()">Add Player to Selected Team</button>
 </div>
 
 <div class="card">
   <h2>New Session</h2>
-  <select id="sessionType" onchange="render()">
+  <select id="sessionType" onchange="toggleSessionInputs(); render()">
     <option value="team">Team Session</option>
     <option value="individual">Individual Session</option>
   </select><br>
@@ -130,6 +130,20 @@ function teamShots(teamId, playerId = null) {
   );
 }
 
+function assignPlayerToCurrentTeam(playerId) {
+  if (!data.currentTeamId) return;
+
+  const player = data.players.find(p => p.id === playerId);
+  if (!player) return;
+
+  if (!player.teamIds.includes(data.currentTeamId)) {
+    player.teamIds.push(data.currentTeamId);
+  }
+
+  save();
+  render();
+}
+
 function allPlayerShots(playerId) {
   return data.shots.filter(s => s.playerId === playerId);
 }
@@ -189,15 +203,32 @@ function setCurrentTeam() {
   render();
 }
 
+
 function addPlayer() {
   const name = document.getElementById("playerName").value.trim();
   if (!name) return;
 
-  data.players.push({
-    id: id(),
-    name,
-    teamIds: []
-  });
+  if (!data.currentTeamId) {
+    alert("Select a team first.");
+    return;
+  }
+
+  let player = data.players.find(p => p.name.toLowerCase() === name.toLowerCase());
+
+  // If player already exists → just add to team
+  if (player) {
+    if (!player.teamIds.includes(data.currentTeamId)) {
+      player.teamIds.push(data.currentTeamId);
+    }
+  } else {
+    // Create AND assign in one step
+    player = {
+      id: id(),
+      name,
+      teamIds: [data.currentTeamId]
+    };
+    data.players.push(player);
+  }
 
   document.getElementById("playerName").value = "";
   save();
@@ -245,7 +276,7 @@ function addSession() {
   }
 
   if (type === "individual") {
-    const playerId = document.getElementById("assignPlayer").value;
+    const playerId = document.getElementById("sessionPlayer").value;
 
     if (!playerId) {
       alert("Select a player first.");
@@ -268,7 +299,13 @@ function addSession() {
   save();
   render();
 }
-
+  
+function toggleSessionInputs() {
+  const type = document.getElementById("sessionType").value;
+  document.getElementById("sessionPlayer").style.display =
+    type === "individual" ? "inline-block" : "none";
+}
+  
 function setCurrentSession() {
   data.currentSessionId = document.getElementById("sessionSelect").value;
   save();
@@ -321,10 +358,16 @@ function removePlayerFromTeam(playerId) {
   render();
 }
 
+function playersForCurrentTeam() {
+  if (!data.currentTeamId) return [];
+  return data.players.filter(p => p.teamIds.includes(data.currentTeamId));
+}
+
 function renderSelectors() {
   const teamSelect = document.getElementById("teamSelect");
   const sessionSelect = document.getElementById("sessionSelect");
   const assignPlayer = document.getElementById("assignPlayer");
+  const sessionPlayer = document.getElementById("sessionPlayer");
 
   teamSelect.innerHTML = data.teams.map(t =>
     `<option value="${t.id}">${t.name}</option>`
@@ -332,7 +375,11 @@ function renderSelectors() {
 
   if (data.currentTeamId) teamSelect.value = data.currentTeamId;
 
-  assignPlayer.innerHTML = data.players.map(p =>
+  assignPlayer.innerHTML = playersForCurrentTeam().map(p =>
+    `<option value="${p.id}">${p.name}</option>`
+  ).join("");
+
+  sessionPlayer.innerHTML = data.players.map(p =>
     `<option value="${p.id}">${p.name}</option>`
   ).join("");
 
@@ -397,6 +444,10 @@ function render() {
         <button class="made" onclick="recordShot('${p.id}', 'made')">Made</button>
         <button class="miss" onclick="recordShot('${p.id}', 'miss')">Miss</button>
         <button onclick="undoPlayer('${p.id}')">Undo</button>
+        <button onclick="assignPlayerToCurrentTeam('${p.id}')">
+          Add to Current Team
+        </button>
+
         ${session.type === "team" ? `<button class="danger" onclick="removePlayerFromTeam('${p.id}')">Remove from Team</button>` : ""}
       </div>
     `;
