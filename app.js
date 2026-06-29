@@ -9,7 +9,75 @@ let data = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
 };
 
 let lastReport = "";
+function selectedTeamId() {
+  return document.getElementById("teamSelect")?.value || null;
+}
 
+function addPlayerToTeamById(playerId) {
+  const teamId = selectedTeamId();
+  const player = playerById(playerId);
+
+  if (!teamId || !player) return;
+
+  if (!player.teamIds.includes(teamId)) {
+    player.teamIds.push(teamId);
+  }
+
+  save();
+  render();
+}
+
+function removePlayerFromTeamById(playerId) {
+  const teamId = selectedTeamId();
+  const player = playerById(playerId);
+
+  if (!teamId || !player) return;
+
+  player.teamIds = player.teamIds.filter(id => id !== teamId);
+
+  save();
+  render();
+}
+
+function renderTeamMembers() {
+  const teamId = selectedTeamId();
+  const availableDiv = document.getElementById("availablePlayers");
+  const membersDiv = document.getElementById("teamMembers");
+
+  if (!availableDiv || !membersDiv) return;
+
+  if (!teamId) {
+    availableDiv.innerHTML = "Create/select a team first.";
+    membersDiv.innerHTML = "";
+    return;
+  }
+
+  const available = data.players
+    .filter(p => !p.teamIds.includes(teamId))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const members = data.players
+    .filter(p => p.teamIds.includes(teamId))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  availableDiv.innerHTML = available.length
+    ? available.map(p => `
+        <div class="member-row">
+          <span>${esc(p.name)}</span>
+          <button onclick="addPlayerToTeamById('${p.id}')">Add</button>
+        </div>
+      `).join("")
+    : "<p>All players are already in this team.</p>";
+
+  membersDiv.innerHTML = members.length
+    ? members.map(p => `
+        <div class="member-row">
+          <span>${esc(p.name)}</span>
+          <button onclick="removePlayerFromTeamById('${p.id}')">Remove</button>
+        </div>
+      `).join("")
+    : "<p>No players in this team yet.</p>";
+}
 function uid() {
   return crypto.randomUUID
     ? crypto.randomUUID()
@@ -244,6 +312,7 @@ function render() {
   renderSetup();
   renderEventSelector();
   renderRecord();
+  renderTeamMembers();
 }
 
 function renderSetup() {
