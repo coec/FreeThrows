@@ -92,24 +92,37 @@
 </div>
     </section>
 
-    <section id="reports" class="screen">
-      <h2>Reports</h2>
+<section id="reports" class="screen">
+  <h2>Reports</h2>
 
-      <div class="card">
-        <button onclick="showEventReport()">Event Report</button>
-        <button onclick="showTeamReport()">Team Report</button>
-        <button onclick="showAllPlayersReport()">All Players Report</button>
-        <button onclick="copyReport()">Copy Report</button>
-      </div>
+  <div class="card">
+    <label>
+      Report type
+      <select id="reportType" onchange="renderReportSelector()">
+        <option value="event">Event</option>
+        <option value="team">Team</option>
+        <option value="player">Player</option>
+        <option value="all">All Players</option>
+      </select>
+    </label>
 
-      <div class="card">
-        <h3>Export / Import</h3>
-        <button onclick="exportSelectedTeam()">Export Selected Team</button>
-        <input type="file" accept=".json" onchange="importTeam(event)">
-      </div>
+    <label id="reportSelectionLabel">
+      Selection
+      <select id="reportSelection"></select>
+    </label>
 
-      <pre id="reportOutput">Choose a report.</pre>
-    </section>
+    <button onclick="generateSelectedReport()">Generate Report</button>
+    <button onclick="copyReport()">Copy Report</button>
+  </div>
+
+  <div class="card">
+    <h3>Export / Import</h3>
+    <button onclick="exportSelectedTeam()">Export Selected Team</button>
+    <input type="file" accept=".json" onchange="importTeam(event)">
+  </div>
+
+  <pre id="reportOutput">Choose a report.</pre>
+</section>
   </main>
 
   <script src="app.js"></script>
