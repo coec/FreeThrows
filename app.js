@@ -10,7 +10,7 @@ let data = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
 
 let lastReport = "";
 function selectedTeamId() {
-  return document.getElementById("teamSelect")?.value || null;
+  return data.currentTeamId || document.getElementById("teamSelect")?.value || null;
 }
 
 function addPlayerToTeamById(playerId) {
@@ -196,7 +196,10 @@ function addTeam() {
   const name = document.getElementById("teamName").value.trim();
   if (!name) return;
 
-  data.teams.push({ id: uid(), name });
+  const team = { id: uid(), name };
+  data.teams.push(team);
+  data.currentTeamId = team.id;
+
   document.getElementById("teamName").value = "";
   save();
   render();
@@ -320,19 +323,22 @@ function render() {
 }
 
 function renderSetup() {
-  console.log("renderSetup running", data.teams);
   const teamSelect = document.getElementById("teamSelect");
   const eventPlayerSelect = document.getElementById("eventPlayerSelect");
 
   if (teamSelect) {
-    const currentTeam = teamSelect.value;
+    const previous = teamSelect.value || data.currentTeamId;
 
     teamSelect.innerHTML = data.teams.map(t =>
       `<option value="${t.id}">${esc(t.name)}</option>`
     ).join("");
 
-    if (currentTeam) {
-      teamSelect.value = currentTeam;
+    if (previous && data.teams.some(t => t.id === previous)) {
+      teamSelect.value = previous;
+      data.currentTeamId = previous;
+    } else if (data.teams.length) {
+      teamSelect.value = data.teams[0].id;
+      data.currentTeamId = data.teams[0].id;
     }
   }
 
