@@ -10,7 +10,15 @@ let data = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
 
 let lastReport = "";
 function selectedTeamId() {
-  return data.currentTeamId || document.getElementById("teamSelect")?.value || null;
+  const teamSelect = document.getElementById("teamSelect");
+
+  if (teamSelect && teamSelect.value) {
+    data.currentTeamId = teamSelect.value;
+    save();
+    return teamSelect.value;
+  }
+
+  return data.currentTeamId || null;
 }
 
 function addPlayerToTeamById(playerId) {
