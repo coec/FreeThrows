@@ -38,16 +38,32 @@
         <select id="teamSelect"></select>
       </div>
 
-      <div class="card">
-        <h3>Players</h3>
-        <input id="playerName" placeholder="Player name">
-        <button onclick="addPlayer()">Add Player</button>
+<div class="card">
+  <h3>Players</h3>
+  <input id="playerName" placeholder="Player name">
+  <button onclick="addPlayer()">Add Player</button>
+</div>
 
-        <div class="row">
-          <select id="playerSelect"></select>
-          <button onclick="addPlayerToTeam()">Add to Team</button>
-        </div>
-      </div>
+<div class="card">
+  <h3>Manage Team Members</h3>
+
+  <label>
+    Selected team
+    <select id="teamSelect" onchange="render()"></select>
+  </label>
+
+  <div class="member-grid">
+    <div>
+      <h4>Available players</h4>
+      <div id="availablePlayers"></div>
+    </div>
+
+    <div>
+      <h4>Team members</h4>
+      <div id="teamMembers"></div>
+    </div>
+  </div>
+</div>
 
       <div class="card">
         <h3>New Event</h3>
