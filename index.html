@@ -52,6 +52,9 @@
   <button onclick="showSessionReport()">Session Report</button>
   <button onclick="showLifetimeReport()">Lifetime Report</button>
   <button onclick="copyReport()">Copy Report</button>
+  <button onclick="exportData()">Export Backup</button>
+  <button onclick="shareData()">Share Backup</button>
+  <input type="file" id="importFile" accept=".json" onchange="importData(event)">
 </div>
 
 <div id="players"></div>
@@ -410,6 +413,74 @@ function copyReport() {
   });
 }
 
+function backupFilename() {
+  const d = new Date().toISOString().slice(0, 10);
+  return `free-throw-backup-${d}.json`;
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json"
+  });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = backupFilename();
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function shareData() {
+  const file = new File(
+    [JSON.stringify(data, null, 2)],
+    backupFilename(),
+    { type: "application/json" }
+  );
+
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    await navigator.share({
+      title: "Free Throw Counter Backup",
+      text: "Free Throw Counter team/player/session data",
+      files: [file]
+    });
+  } else {
+    exportData();
+    alert("Sharing is not supported here, so the backup was downloaded instead.");
+  }
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = function(e) {
+    try {
+      const imported = JSON.parse(e.target.result);
+
+      if (!imported.players || !imported.teams) {
+        alert("That does not look like a valid Free Throw Counter backup.");
+        return;
+      }
+
+      if (!confirm("Import this backup? This will replace the current data on this device.")) {
+        return;
+      }
+
+      data = imported;
+      save();
+      render();
+      alert("Import complete.");
+    } catch {
+      alert("Import failed. The file could not be read.");
+    }
+  };
+
+  reader.readAsText(file);
+}
+  
 ensureSession();
 render();
 </script>
