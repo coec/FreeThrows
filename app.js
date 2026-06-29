@@ -340,25 +340,39 @@ function renderSetup() {
   const eventPlayerSelect = document.getElementById("eventPlayerSelect");
 
   if (teamSelect) {
-    const previous = teamSelect.value || data.currentTeamId;
+    teamSelect.replaceChildren();
 
-    teamSelect.innerHTML = data.teams.map(t =>
-      `<option value="${t.id}">${esc(t.name)}</option>`
-    ).join("");
+    data.teams.forEach(t => {
+      const opt = document.createElement("option");
+      opt.value = t.id;
+      opt.textContent = t.name || "Unnamed team";
+      teamSelect.appendChild(opt);
+    });
 
-    if (previous && data.teams.some(t => t.id === previous)) {
-      teamSelect.value = previous;
-      data.currentTeamId = previous;
-    } else if (data.teams.length) {
-      teamSelect.value = data.teams[0].id;
-      data.currentTeamId = data.teams[0].id;
+    if (!data.currentTeamId || !data.teams.some(t => t.id === data.currentTeamId)) {
+      data.currentTeamId = data.teams[0]?.id || null;
     }
+
+    if (data.currentTeamId) {
+      teamSelect.value = data.currentTeamId;
+    }
+
+    teamSelect.onchange = function () {
+      data.currentTeamId = teamSelect.value;
+      save();
+      render();
+    };
   }
 
   if (eventPlayerSelect) {
-    eventPlayerSelect.innerHTML = data.players.map(p =>
-      `<option value="${p.id}">${esc(p.name)}</option>`
-    ).join("");
+    eventPlayerSelect.replaceChildren();
+
+    data.players.forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name || "Unnamed player";
+      eventPlayerSelect.appendChild(opt);
+    });
   }
 
   renderTeamMembers();
