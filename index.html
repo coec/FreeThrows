@@ -52,7 +52,7 @@
   <button onclick="showSessionReport()">Session Report</button>
   <button onclick="showLifetimeReport()">Lifetime Report</button>
   <button onclick="copyReport()">Copy Report</button>
-  <button onclick="exportData()">Export Backup</button>
+  <button onclick="exportSelectedTeam()">Export Selected Team</button>
   <button onclick="shareData()">Share Backup</button>
   <input type="file" id="importFile" accept=".json" onchange="importData(event)">
 </div>
@@ -479,6 +479,39 @@ function importData(event) {
   };
 
   reader.readAsText(file);
+}
+
+function exportSelectedTeam() {
+  const teamId = document.getElementById("teamFilter").value;
+
+  if (teamId === "all" || teamId === "none") {
+    alert("Please select a specific team first.");
+    return;
+  }
+
+  const team = data.teams.find(t => t.id === teamId);
+  const players = data.players.filter(p => p.teams.includes(teamId));
+
+  const exportData = {
+    exportType: "freeThrowTeam",
+    exportedAt: new Date().toISOString(),
+    team,
+    players
+  };
+
+  const safeName = team.name.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+  const filename = `free-throw-team-${safeName}.json`;
+
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+    type: "application/json"
+  });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
   
 ensureSession();
